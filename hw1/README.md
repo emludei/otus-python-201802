@@ -19,3 +19,7 @@
 # Deco
 
 Запуск: `python3 deco.py`
+
+# Poker
+
+Запуск: `python3 poker.py`
