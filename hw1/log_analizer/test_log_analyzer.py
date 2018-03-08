@@ -98,6 +98,11 @@ class TestGetStat(unittest.TestCase):
         self.assertIsNone(stat)
         self.assertTrue("exceed max paring errors" in self.logger.error_message)
 
+        invalid_logs = invalid_log_generator(MIN_PARSING_ERR_COUNT - 1)
+        stat = get_stat_from_file(invalid_logs, config, self.logger)
+        self.assertIsNone(stat)
+        self.assertTrue("exceed max paring errors" in self.logger.error_message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,7 +49,7 @@ LOG_LINE_REGEXP = re.compile(
     r"(?P<request_time>\d+\.?\d*)$"
 )
 
-LOG_FILENAME_REGEXP = re.compile(r"^nginx-access-ui\.log-(?P<log_date>\d{8}).*$")
+LOG_FILENAME_REGEXP = re.compile(r"^nginx-access-ui\.log-(?P<log_date>\d{8})(\.gz|\.txt)?$")
 REPORT_FILENAME_REGEXP = re.compile(r"^report-(?P<log_date>\d{4}\.\d{2}\.\d{2})\.html$")
 REPORT_FILE_NAME_FORMAT = "report-{date}.html"
 REPORT_PRECISION = 3
@@ -256,6 +256,15 @@ def get_stat_from_file(log_file, config, logger):
         request_times[url].append(request_time)
 
         parse_stat[PARSING_SUCCESS_KEY] += 1
+
+    err_percent = parse_stat[PARSING_ERROR_KEY] / (parse_stat[PARSING_SUCCESS_KEY] or 1)
+    if err_percent >= MAX_PARSING_ERR_PERCENT:
+        message = "exceed max paring errors limit: errors {0:.0f}, success {1:.0f}".format(
+            parse_stat[PARSING_ERROR_KEY],
+            parse_stat[PARSING_SUCCESS_KEY]
+        )
+        logger.error(message)
+        return
 
     result = [url_stat for url_stat in log_stat.values()]
     result.sort(key=lambda url_stat: url_stat[TIME_SUM_KEY], reverse=True)
