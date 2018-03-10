@@ -57,7 +57,6 @@ REPORT_PRECISION = 3
 
 
 MAX_PARSING_ERR_PERCENT = .5
-MIN_PARSING_ERR_COUNT = 5000
 
 
 LogFileInfo = namedtuple("LogFileInfo", ("filepath", "date"))
