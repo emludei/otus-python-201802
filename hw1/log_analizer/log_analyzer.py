@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# log_format ui_short '$remote_addr $remote_user $http_x_real_ip [$time_local] "$request" '
-#                     '$status $body_bytes_sent "$http_referer" '
-#                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
-#                     '$request_time';
+# log_format ui_short '$remote_addr $remote_user $http_x_real_ip
+#                     [$time_local] "$request" ' '$status $body_bytes_sent
+#                     "$http_referer" ' '"$http_user_agent"
+#                     "$http_x_forwarded_for"  "$http_X_REQUEST_ID"
+#                     "$http_X_RB_USER" ' '$request_time';
 
 import json
 import logging
@@ -12,6 +13,7 @@ import os
 import gzip
 import time
 import re
+import io
 
 from copy import deepcopy
 from collections import defaultdict, namedtuple
@@ -38,7 +40,8 @@ LOG_LINE_REGEXP = re.compile(
     r"^(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+"
     r"(?P<remote_user>[^\s]+)\s+"
     r"(?P<x_real_ip>[^\s]+)\s+"
-    r"\[(?P<time_local>\d{1,2}/[a-zA-Z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s.\d{1,4})\]\s+"
+    r"\[(?P<time_local>\d{1,2}/[a-zA-Z]{3}/"
+    r"\d{4}:\d{2}:\d{2}:\d{2}\s.\d{1,4})\]\s+"  # time_local
     r"\"(?P<http_method>[A-Z]+)\s(?P<url>[^\s]+)\s(?P<http_version>[^\s]+)\"\s+"
     r"(?P<status>\d{3})\s+"
     r"(?P<body_bytes_sent>\d+)\s+"
@@ -50,8 +53,12 @@ LOG_LINE_REGEXP = re.compile(
     r"(?P<request_time>\d+\.?\d*)$"
 )
 
-LOG_FILENAME_REGEXP = re.compile(r"^nginx-access-ui\.log-(?P<log_date>\d{8})(\.gz|\.txt)?$")
-REPORT_FILENAME_REGEXP = re.compile(r"^report-(?P<log_date>\d{4}\.\d{2}\.\d{2})\.html$")
+LOG_FILENAME_REGEXP = re.compile(
+    r"^nginx-access-ui\.log-(?P<log_date>\d{8})(\.gz|\.txt)?$"
+)
+REPORT_FILENAME_REGEXP = re.compile(
+    r"^report-(?P<log_date>\d{4}\.\d{2}\.\d{2})\.html$"
+)
 REPORT_FILE_NAME_FORMAT = "report-{date}.html"
 REPORT_PRECISION = 3
 
@@ -67,8 +74,13 @@ def get_last_logfile_path(config):
     if log_dir is None:
         raise ValueError("Config parameter 'LOG_DIR' is required")
 
-    all_filenames = (LOG_FILENAME_REGEXP.fullmatch(name) for name in os.listdir(log_dir))
-    filtered_files = filter(lambda file_match: file_match is not None, all_filenames)
+    all_filenames = (
+        LOG_FILENAME_REGEXP.fullmatch(name) for name in os.listdir(log_dir)
+    )
+    filtered_files = filter(
+        lambda file_match: file_match is not None,
+        all_filenames
+    )
 
     latest_logfile_info = None
     for file_match in filtered_files:
@@ -87,7 +99,9 @@ def get_last_logfile_path(config):
 
 def parse_arguments():
     parser = ArgumentParser()
-    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Path to config file")
+    parser.add_argument(
+        "--config", default=DEFAULT_CONFIG_PATH, help="Path to config file"
+    )
     cmd_arguments = parser.parse_args()
     return cmd_arguments
 
@@ -96,11 +110,12 @@ def parse_config(cmd_arguments):
     config = deepcopy(DEFAULT_CONFIG)
 
     if not os.path.exists(cmd_arguments.config):
-        raise FileNotFoundError("Config {0} does not exist".format(cmd_arguments.config))
+        raise FileNotFoundError(
+            "Config {0} does not exist".format(cmd_arguments.config)
+        )
 
     with open(cmd_arguments.config, "r") as config_file:
-        data = config_file.read()
-        user_config = json.loads(data)
+        user_config = json.load(config_file)
         config.update(user_config)
 
     return config
@@ -142,14 +157,15 @@ def write_complete_timestamp(config):
 
 def get_median(times):
     length = len(times)
-    if length <= 0:
+    if length == 0:
         return
 
     if length % 2 == 1:
         median_index = length // 2
         return times[median_index]
 
-    # В списке четное количество элкментов. Берем среднее от двух элементов находящихся в середине списка.
+    # В списке четное количество элкментов. Берем среднее от двух элементов
+    # находящихся в середине списка.
     index = length // 2
     median = (times[index - 1] + times[index]) * .5
     return median
@@ -185,21 +201,16 @@ def get_stat_from_file(log_file, config, logger):
             parse_stat["parsing_error"] += 1
             continue
 
-        if "count" not in log_stat[url]:
-            log_stat[url]["count"] = 1.0
-        else:
-            log_stat[url]["count"] += 1
+        log_stat[url]["count"] = log_stat[url].get("count", 0) + 1.0
 
-        if "time_sum" not in log_stat[url]:
-            log_stat[url]["time_sum"] = request_time
-        else:
-            log_stat[url]["time_sum"] += request_time
+        time_sum = log_stat[url].get("time_sum", 0)
+        log_stat[url]["time_sum"] = time_sum + request_time
 
-        if "time_max" not in log_stat[url] or request_time > log_stat[url]["time_max"]:
+        time_max = log_stat[url].get("time_max")
+        if time_max is None or request_time > time_max:
             log_stat[url]["time_max"] = request_time
 
-        if "url" not in log_stat[url]:
-            log_stat[url]["url"] = url
+        log_stat[url].setdefault("url", url)
 
         total_stat["count"] += 1
         total_stat["time_sum"] += request_time
@@ -207,20 +218,28 @@ def get_stat_from_file(log_file, config, logger):
 
         parse_stat["parsing_success"] += 1
 
-    err_percent = parse_stat["parsing_error"] / (parse_stat["parsing_success"] or 1)
+    success_delimiter = parse_stat["parsing_success"] or 1
+    err_percent = parse_stat["parsing_error"] / success_delimiter
     if err_percent >= MAX_PARSING_ERR_PERCENT:
-        message = "exceed max paring errors limit: errors {0:.0f}, success {1:.0f}".format(
+        message_format = "exceed max paring errors limit: errors {0:.0f}, " \
+                         "success {1:.0f}"
+        message = message_format.format(
             parse_stat["parsing_error"],
             parse_stat["parsing_success"]
         )
         logger.error(message)
         return
 
-    result = sorted(log_stat.values(), key=lambda url_stat: url_stat["time_sum"], reverse=True)
+    result = sorted(
+        log_stat.values(),
+        key=lambda url_stat: url_stat["time_sum"],
+        reverse=True
+    )
     result = result[:report_size]
 
-    # Для первых n url-в с наибольшим суммарным временем обработки запросов, считаем метрики которые нельзя
-    # посчитать по ходу парсинга (avg, медианы и т.д.)
+    # Для первых n url-в с наибольшим суммарным временем обработки запросов,
+    # считаем метрики которые нельзя посчитать по ходу парсинга
+    # (avg, медианы и т.д.)
     for url_stat in result:
         count_perc = url_stat["count"] / total_stat["count"] * 100
         time_perc = url_stat["time_sum"] / total_stat["time_sum"] * 100
@@ -244,13 +263,11 @@ def get_stat_from_file(log_file, config, logger):
 
 def process_analyzing(last_logfile_info, config, logger):
     log_file = last_logfile_info.filepath
-    try:
-        log_file = gzip.open(log_file, "rt") if log_file.endswith(".gz") else open(log_file, "r")
-        stat = get_stat_from_file(log_file, config, logger)
-    finally:
-        log_file.close()
+    file_open_func = gzip.open if log_file.endswith(".gz") else io.open
 
-    return stat
+    with file_open_func(log_file, "rt") as log_file:
+        stat = get_stat_from_file(log_file, config, logger)
+        return stat
 
 
 def create_report(stat, config, report_path, logger):
@@ -258,7 +275,8 @@ def create_report(stat, config, report_path, logger):
     if template_path is None:
         raise ValueError("Config parameter 'REPORT_TEMPLATE' is required")
 
-    os.makedirs(os.path.dirname(report_path), mode=DEFAULT_FS_MODE, exist_ok=True)
+    os.makedirs(os.path.dirname(report_path), mode=DEFAULT_FS_MODE,
+                exist_ok=True)
 
     with open(template_path) as template_file:
         report_content = template_file.read()
@@ -284,17 +302,22 @@ def main(config, logger):
     if report_dir is None:
         raise ValueError("Config parameter 'REPORT_DIR' is required")
 
-    report_filename = REPORT_FILE_NAME_FORMAT.format(date=time.strftime("%Y.%m.%d", last_logfile_info.date))
+    report_filename = REPORT_FILE_NAME_FORMAT.format(
+        date=time.strftime("%Y.%m.%d", last_logfile_info.date)
+    )
     report_path = os.path.join(report_dir, report_filename)
 
     if os.path.exists(report_path):
-        logger.info("last log file {0} already processed".format(last_logfile_info.filepath))
+        logger.info("last log file {0} already processed".format(
+            last_logfile_info.filepath)
+        )
         write_complete_timestamp(config)
         return
 
     logger.info("Start processing {0}".format(last_logfile_info.filepath))
     stat = process_analyzing(last_logfile_info, config, logger)
-    logger.info("Statistic collected for {0}".format(last_logfile_info.filepath))
+    logger.info("Statistic collected for {0}".format(
+        last_logfile_info.filepath))
 
     create_report(stat, config, report_path, logger)
     write_complete_timestamp(config)
