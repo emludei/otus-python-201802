@@ -291,7 +291,11 @@ def create_report(stat, config, report_path, logger):
 
 
 def main(config, logger):
-    last_logfile_info = get_last_logfile_path(config)
+    try:
+        last_logfile_info = get_last_logfile_path(config)
+    except FileNotFoundError as e:
+        logger.error("{0} {1}".format(e.strerror, e.filename))
+        return os.EX_OSFILE
 
     if last_logfile_info is None:
         logger.info("No logs for analyzing")
@@ -331,7 +335,10 @@ if __name__ == "__main__":
     logger = get_logger(config)
 
     try:
-        main(config, logger)
+        exit_code = main(config, logger)
     except:
         logging.exception("Runtime error: ")
         raise
+
+    if exit_code is not None:
+        exit(exit_code)
