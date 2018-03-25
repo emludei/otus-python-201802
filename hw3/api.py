@@ -175,11 +175,6 @@ class Field:
         self.validators = []
         self.is_empty = False
 
-        error_messages = {}
-        for cls in reversed(self.__class__.__mro__):
-            error_messages.update(getattr(cls, "default_error_messages", {}))
-        self.error_messages = error_messages
-
     def validate(self, value):
         self.is_empty = False
 
