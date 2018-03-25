@@ -110,7 +110,8 @@ def validate_email(value):
         message = "This filed must contains {0}.".format(AT_SIGN)
         raise ValidationError(message)
 
-    if not list(part for part in value.split(AT_SIGN) if part):
+    parts = list(part for part in value.split(AT_SIGN) if part)
+    if len(parts) != EMAIL_PARTS:
         message = "Invalid email, must consist of two parts " \
                   "separated by {0}.".format(AT_SIGN)
         raise ValidationError(message)
@@ -152,9 +153,7 @@ def validate_gender(value):
 
 def validate_int_array(value):
     error_message = "This field must be array of integers."
-    value_type = type(value)
-    if (not hasattr(value_type, "__getitem__") or
-            not hasattr(value_type, "__len__")):
+    if not isinstance(value, (list, tuple)):
         raise ValidationError(error_message)
 
     for item in value:

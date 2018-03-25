@@ -144,14 +144,24 @@ class TestSuite(unittest.TestCase):
         self.assertTrue("This field must be array of integers" in response)
         self.assertFalse("Invalid format of date" in response)
 
+        args = {"client_ids": [], "date": "20.05.2017"}
+        request["arguments"] = args
+        response, code = self.get_response(request)
+        self.assertEqual(api.INVALID_REQUEST, code)
+        self.assertTrue("This field must be non empty" in response)
+
 
 class TestValidators(unittest.TestCase):
     def test_validate_digit(self):
         with self.assertRaises(api.ValidationError):
             api.validate_digit("12")
+        with self.assertRaises(api.ValidationError):
             api.validate_digit(3.5)
+        with self.assertRaises(api.ValidationError):
             api.validate_digit("asd")
+        with self.assertRaises(api.ValidationError):
             api.validate_digit({})
+        with self.assertRaises(api.ValidationError):
             api.validate_digit(None)
 
         try:
@@ -166,8 +176,11 @@ class TestValidators(unittest.TestCase):
     def test_validate_string(self):
         with self.assertRaises(api.ValidationError):
             api.validate_string(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_string(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_string({})
+        with self.assertRaises(api.ValidationError):
             api.validate_string(str)
 
         try:
@@ -182,10 +195,15 @@ class TestValidators(unittest.TestCase):
     def test_validate_dict(self):
         with self.assertRaises(api.ValidationError):
             api.validate_dict(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_dict(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_dict([])
+        with self.assertRaises(api.ValidationError):
             api.validate_dict("")
+        with self.assertRaises(api.ValidationError):
             api.validate_dict(tuple())
+        with self.assertRaises(api.ValidationError):
             api.validate_dict(dict)
 
         try:
@@ -201,14 +219,23 @@ class TestValidators(unittest.TestCase):
     def test_validate_phone(self):
         with self.assertRaises(api.ValidationError):
             api.validate_phone(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_phone(-71234567890)
+        with self.assertRaises(api.ValidationError):
             api.validate_phone(-7123456789)
+        with self.assertRaises(api.ValidationError):
             api.validate_phone(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_phone([])
+        with self.assertRaises(api.ValidationError):
             api.validate_phone("12345678900")
+        with self.assertRaises(api.ValidationError):
             api.validate_phone("-7123456789")
+        with self.assertRaises(api.ValidationError):
             api.validate_phone("")
+        with self.assertRaises(api.ValidationError):
             api.validate_phone(tuple())
+        with self.assertRaises(api.ValidationError):
             api.validate_phone(dict)
 
         try:
@@ -222,11 +249,20 @@ class TestValidators(unittest.TestCase):
     def test_validate_email(self):
         with self.assertRaises(api.ValidationError):
             api.validate_email(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_email("asd.com")
+        with self.assertRaises(api.ValidationError):
+            api.validate_email("asd@")
+        with self.assertRaises(api.ValidationError):
             api.validate_email(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_email({})
+        with self.assertRaises(api.ValidationError):
             api.validate_email("@")
+        with self.assertRaises(api.ValidationError):
             api.validate_email(str)
+        with self.assertRaises(api.ValidationError):
+            api.validate_email("asd@")
 
         try:
             api.validate_email("test@test.com")
@@ -239,14 +275,23 @@ class TestValidators(unittest.TestCase):
     def test_validate_birthday(self):
         with self.assertRaises(api.ValidationError):
             api.validate_birthday(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("")
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday({})
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("@")
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("01-01-1999")
-            api.validate_birthday("01.01.1950")
+        with self.assertRaises(api.ValidationError):
+            api.validate_birthday("01.01.1940")
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("99.01.1999")
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("01.99.1999")
+        with self.assertRaises(api.ValidationError):
             api.validate_birthday("01.99.2999")
 
         try:
@@ -260,10 +305,15 @@ class TestValidators(unittest.TestCase):
     def test_validate_gender(self):
         with self.assertRaises(api.ValidationError):
             api.validate_gender(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_gender(-1)
+        with self.assertRaises(api.ValidationError):
             api.validate_gender(1.0)
+        with self.assertRaises(api.ValidationError):
             api.validate_gender("")
+        with self.assertRaises(api.ValidationError):
             api.validate_gender(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_gender({})
 
         try:
@@ -278,13 +328,19 @@ class TestValidators(unittest.TestCase):
     def test_validate_int_array(self):
         with self.assertRaises(api.ValidationError):
             api.validate_int_array(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array("")
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array({1: 1, 2: 2})
-            api.validate_int_array([])
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array(["1", "2", "3"])
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array([1, 2, "3"])
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array([1, 2, [3, 4]])
+        with self.assertRaises(api.ValidationError):
             api.validate_int_array({1, 2, 3, 4})
 
         try:
@@ -298,12 +354,19 @@ class TestValidators(unittest.TestCase):
     def test_validate_date(self):
         with self.assertRaises(api.ValidationError):
             api.validate_date(123)
+        with self.assertRaises(api.ValidationError):
             api.validate_date("")
+        with self.assertRaises(api.ValidationError):
             api.validate_date(None)
+        with self.assertRaises(api.ValidationError):
             api.validate_date({})
+        with self.assertRaises(api.ValidationError):
             api.validate_date("01-01-1999")
+        with self.assertRaises(api.ValidationError):
             api.validate_date("99.01.1999")
+        with self.assertRaises(api.ValidationError):
             api.validate_date("01.99.1999")
+        with self.assertRaises(api.ValidationError):
             api.validate_date("01.99.2999")
 
         try:
