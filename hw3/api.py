@@ -448,7 +448,7 @@ def method_handler(request, ctx, store):
 
     method_request = MethodRequest(body)
     if not method_request.is_valid():
-        return ERRORS[BAD_REQUEST], BAD_REQUEST
+        return method_request.repr_errors(), INVALID_REQUEST
 
     if not check_auth(method_request):
         return ERRORS[FORBIDDEN], FORBIDDEN
