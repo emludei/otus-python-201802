@@ -275,9 +275,7 @@ class BaseRequestValidator:
         return empty_fields
 
     def __getattr__(self, attr):
-        try:
-            self.fields[attr]
-        except KeyError:
+        if self.fields.get(attr) is None:
             raise KeyError(
                 "Key '%s' not found in '%s'. Choices are: %s." % (
                     attr,
@@ -285,6 +283,7 @@ class BaseRequestValidator:
                     ', '.join(sorted(f for f in self.fields)),
                 )
             )
+
         return self.request_data.get(attr)
 
 
