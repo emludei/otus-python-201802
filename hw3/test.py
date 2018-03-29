@@ -1,5 +1,4 @@
 import unittest
-import sys
 import datetime
 import hashlib
 
@@ -8,7 +7,7 @@ import api
 from collections import defaultdict, OrderedDict
 
 
-class TestSuite(unittest.TestCase):
+class BaseHandlerTest(unittest.TestCase):
     def setUp(self):
         self.context = {}
         self.headers = {}
@@ -18,11 +17,15 @@ class TestSuite(unittest.TestCase):
         data = {"body": request, "headers": self.headers}
         return api.method_handler(data, self.context, self.store)
 
+
+class TestSuite(BaseHandlerTest):
     def test_empty_request(self):
         _, code = self.get_response({})
         self.assertEqual(api.INVALID_REQUEST, code)
 
-    def test_online_score(self):
+
+class TestOnlineScoreHandler(BaseHandlerTest):
+    def test_correct_all_fields(self):
         request = {
             "account": "horns&hoofs",
             "login": "h&f",
@@ -46,71 +49,101 @@ class TestSuite(unittest.TestCase):
             set(self.context.get("has")),
             {"phone", "email", "first_name", "last_name", "birthday", "gender"}
         )
-        self.assertLess(abs(response.get("score")-5.0), sys.float_info.epsilon)
+        self.assertAlmostEqual(response.get("score"), 5.0)
 
-        args = {
-            "phone": "79175002040",
-            "email": "john@gmail.com",
-            "first_name": "John",
-            "birthday": "01.01.1990",
-            "gender": 1
+    def test_correct_without_last_name(self):
+        request = {
+            "account": "horns&hoofs",
+            "login": "h&f",
+            "method": "online_score",
+            "token": "55cc9ce545bcd144300fe9efc28e65d415b923ebb6be1e19d2750a2c"
+                     "03e80dd209a27954dca045e5bb12418e7d89b6d718a9e35af34e14e1"
+                     "d5bcd5a08f21fc95",
+            "arguments": {
+                "phone": "79175002040",
+                "email": "john@gmail.com",
+                "first_name": "John",
+                "birthday": "01.01.1990",
+                "gender": 1
+            }
         }
-        request["arguments"] = args
+
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code)
         self.assertEqual(
             set(self.context.get("has")),
             {"phone", "email", "first_name", "birthday", "gender"}
         )
-        self.assertLess(abs(response.get("score")-4.5), sys.float_info.epsilon)
+        self.assertAlmostEqual(response.get("score"), 4.5)
 
-        args = {
-            "birthday": "01.01.1990",
-            "gender": 1
+    def test_correct_birthday_and_gender(self):
+        request = {
+            "account": "horns&hoofs",
+            "login": "h&f",
+            "method": "online_score",
+            "token": "55cc9ce545bcd144300fe9efc28e65d415b923ebb6be1e19d2750a2c"
+                     "03e80dd209a27954dca045e5bb12418e7d89b6d718a9e35af34e14e1"
+                     "d5bcd5a08f21fc95",
+            "arguments": {
+                "birthday": "01.01.1990",
+                "gender": 1
+            }
         }
-        request["arguments"] = args
+
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code)
         self.assertEqual(
             set(self.context.get("has")),
             {"birthday", "gender"}
         )
-        self.assertLess(abs(response.get("score")-1.5), sys.float_info.epsilon)
+        self.assertAlmostEqual(response.get("score"), 1.5)
 
-        args = {
-            "birthday": "01.99.1990",
-            "gender": 1
+    def test_invalid_birthday(self):
+        request = {
+            "account": "horns&hoofs",
+            "login": "h&f",
+            "method": "online_score",
+            "token": "55cc9ce545bcd144300fe9efc28e65d415b923ebb6be1e19d2750a2c"
+                     "03e80dd209a27954dca045e5bb12418e7d89b6d718a9e35af34e14e1"
+                     "d5bcd5a08f21fc95",
+            "arguments": {
+                "birthday": "01.99.1990",
+                "gender": 1
+            }
         }
-        request["arguments"] = args
+
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
-        self.assertEqual(
-            set(self.context.get("has")),
-            {"birthday", "gender"}
-        )
+
         self.assertTrue(
             "Invalid format of date" in response
         )
 
+    def test_admin_correct_birthday_and_gender(self):
         key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
         digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
-        request["login"] = "admin"
-        request["token"] = digest
-
-        args = {
-            "birthday": "01.01.1990",
-            "gender": 1
+        request = {
+            "account": "horns&hoofs",
+            "login": "admin",
+            "method": "online_score",
+            "token": digest,
+            "arguments": {
+                "birthday": "01.01.1990",
+                "gender": 1
+            }
         }
-        request["arguments"] = args
+
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code)
         self.assertEqual(
             set(self.context.get("has")),
             {"birthday", "gender"}
         )
-        self.assertLess(abs(response.get("score")-42), sys.float_info.epsilon)
+        self.assertEqual(response.get("score"), 42)
 
-    def test_clients_interests(self):
+
+class TestClientInterestsHandler(BaseHandlerTest):
+    def test_admin_correct(self):
         key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
         digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
         request = {
@@ -124,56 +157,89 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(api.OK, code)
         self.assertEqual(self.context.get("nclients"), 4)
 
-        args = {"client_ids": [1, 2, 3, 4], "date": "20.99.2017"}
-        request["arguments"] = args
+    def test_admin_invalid_date_format(self):
+        key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
+        digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
+        request = {
+            "account": "horns&hoofs", "login": "admin",
+            "method": "clients_interests",
+            "token": digest,
+            "arguments": {"client_ids": [1, 2, 3, 4], "date": "20.99.2017"}
+        }
+
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue("Invalid format of date" in response)
 
-        args = {"client_ids": {1, 2, 3, 4}, "date": "20.99.2017"}
-        request["arguments"] = args
+    def test_admin_invalid_date_format_and_client_ids_type(self):
+        key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
+        digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
+        request = {
+            "account": "horns&hoofs", "login": "admin",
+            "method": "clients_interests",
+            "token": digest,
+            "arguments": {"client_ids": {1, 2, 3, 4}, "date": "20.99.2017"}
+        }
+
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue("This field must be array of integers" in response)
         self.assertTrue("Invalid format of date" in response)
 
-        args = {"client_ids": {1, 2, 3, 4}, "date": "20.05.2017"}
-        request["arguments"] = args
+    def test_admin_invalid_client_ids_type(self):
+        key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
+        digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
+        request = {
+            "account": "horns&hoofs", "login": "admin",
+            "method": "clients_interests",
+            "token": digest,
+            "arguments": {"client_ids": {1, 2, 3, 4}, "date": "20.05.2017"}
+        }
+
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue("This field must be array of integers" in response)
         self.assertFalse("Invalid format of date" in response)
 
-        args = {"client_ids": [], "date": "20.05.2017"}
-        request["arguments"] = args
+    def test_admin_invalid_empty_client_ids(self):
+        key = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
+        digest = hashlib.sha512(key.encode("utf-8")).hexdigest()
+        request = {
+            "account": "horns&hoofs", "login": "admin",
+            "method": "clients_interests",
+            "token": digest,
+            "arguments": {"client_ids": [], "date": "20.05.2017"}
+        }
+
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue("This field must be non empty" in response)
 
 
 class TestValidators(unittest.TestCase):
-    def test_validate_digit(self):
+    def test_validate_integer_invalid_values(self):
         with self.assertRaises(api.ValidationError):
-            api.validate_digit("12")
+            api.validate_integer("12")
         with self.assertRaises(api.ValidationError):
-            api.validate_digit(3.5)
+            api.validate_integer(3.5)
         with self.assertRaises(api.ValidationError):
-            api.validate_digit("asd")
+            api.validate_integer("asd")
         with self.assertRaises(api.ValidationError):
-            api.validate_digit({})
+            api.validate_integer({})
         with self.assertRaises(api.ValidationError):
-            api.validate_digit(None)
+            api.validate_integer(None)
 
+    def test_validate_integer_correct_values(self):
         try:
-            api.validate_digit(10)
-            api.validate_digit(-10)
-            api.validate_digit(0)
+            api.validate_integer(10)
+            api.validate_integer(-10)
+            api.validate_integer(0)
         except BaseException as e:
             message = "api.validate_digit(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_string(self):
+    def test_validate_string_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_string(123)
         with self.assertRaises(api.ValidationError):
@@ -183,6 +249,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_string(str)
 
+    def test_validate_string_correct_values(self):
         try:
             api.validate_string("")
             api.validate_string("asd")
@@ -192,7 +259,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_dict(self):
+    def test_validate_dict_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_dict(123)
         with self.assertRaises(api.ValidationError):
@@ -206,6 +273,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_dict(dict)
 
+    def test_validate_dict_correct_values(self):
         try:
             api.validate_dict({})
             api.validate_dict({"a": 1})
@@ -216,7 +284,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_phone(self):
+    def test_validate_phone_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_phone(123)
         with self.assertRaises(api.ValidationError):
@@ -238,6 +306,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_phone(dict)
 
+    def test_validate_phone_correct_values(self):
         try:
             api.validate_phone(71234567890)
             api.validate_phone("71234567890")
@@ -246,7 +315,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_email(self):
+    def test_validate_email_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_email(123)
         with self.assertRaises(api.ValidationError):
@@ -264,6 +333,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_email("asd@")
 
+    def test_validate_email_correct_values(self):
         try:
             api.validate_email("test@test.com")
             api.validate_email("test.test@test.test.com")
@@ -272,7 +342,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_birthday(self):
+    def test_validate_birthday_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_birthday(123)
         with self.assertRaises(api.ValidationError):
@@ -294,6 +364,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_birthday("01.99.2999")
 
+    def test_validate_birthday_correct_values(self):
         try:
             api.validate_birthday("01.01.1990")
             api.validate_birthday("23.11.2015")
@@ -302,7 +373,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_gender(self):
+    def test_validate_gender_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_gender(123)
         with self.assertRaises(api.ValidationError):
@@ -316,6 +387,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_gender({})
 
+    def test_validate_gender_correct_values(self):
         try:
             api.validate_gender(0)
             api.validate_gender(1)
@@ -325,7 +397,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_int_array(self):
+    def test_validate_int_array_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_int_array(123)
         with self.assertRaises(api.ValidationError):
@@ -343,6 +415,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_int_array({1, 2, 3, 4})
 
+    def test_validate_int_array_correct_values(self):
         try:
             api.validate_int_array([1, 2, 3, 4])
             api.validate_int_array((1, 2, 3, 4))
@@ -351,7 +424,7 @@ class TestValidators(unittest.TestCase):
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_date(self):
+    def test_validate_date_invalid_values(self):
         with self.assertRaises(api.ValidationError):
             api.validate_date(123)
         with self.assertRaises(api.ValidationError):
@@ -369,6 +442,7 @@ class TestValidators(unittest.TestCase):
         with self.assertRaises(api.ValidationError):
             api.validate_date("01.99.2999")
 
+    def test_validate_date_correct_values(self):
         try:
             api.validate_date("01.01.1990")
             api.validate_date("23.11.2015")
@@ -378,8 +452,8 @@ class TestValidators(unittest.TestCase):
             self.fail(message)
 
 
-class TestRequestModels(unittest.TestCase):
-    def test_clients_interests_request(self):
+class TestClientsInterestRequest(unittest.TestCase):
+    def test_correct_values(self):
         data = {
             "client_ids": [1, 2, 3, 4],
             "date": "01.01.1990"
@@ -387,6 +461,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.ClientsInterestsRequest(data)
         self.assertTrue(request_validator.is_valid())
 
+    def test_invalid_string_client_id(self):
         data = {
             "client_ids": ["1", 2, 3, 4],
             "date": "01.01.1990"
@@ -394,6 +469,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.ClientsInterestsRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_date_month(self):
         data = {
             "client_ids": [1, 2, 3, 4],
             "date": "01.99.1990"
@@ -401,6 +477,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.ClientsInterestsRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_date_format(self):
         data = {
             "client_ids": [1, 2, 3, 4],
             "date": "01-01-1990"
@@ -408,18 +485,21 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.ClientsInterestsRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_correct_without_date(self):
         data = {
             "client_ids": [1, 2, 3, 4]
         }
         request_validator = api.ClientsInterestsRequest(data)
         self.assertTrue(request_validator.is_valid())
 
+    def test_invalid_without_client_ids(self):
         data = {
             "date": "01.01.1990"
         }
         request_validator = api.ClientsInterestsRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_client_ids_type_set(self):
         data = {
             "client_ids": {1, 2, 3, 4},
             "date": "01.01.1990"
@@ -427,6 +507,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.ClientsInterestsRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_correct_client_ids_type_tuple(self):
         data = {
             "client_ids": (1, 2, 3, 4),
             "date": "01.01.1990"
@@ -441,7 +522,9 @@ class TestRequestModels(unittest.TestCase):
             ["client_ids", "date"]
         )
 
-    def test_online_score_request(self):
+
+class TestOnlineScoreRequest(unittest.TestCase):
+    def test_correct_all_fields(self):
         data = {
             "first_name": "John",
             "last_name": "Smith",
@@ -459,6 +542,7 @@ class TestRequestModels(unittest.TestCase):
         self.assertEqual(request_validator.birthday, data.get("birthday"))
         self.assertEqual(request_validator.gender, data.get("gender"))
 
+    def test_correct_first_name_and_last_name(self):
         data = {
             "first_name": "John",
             "last_name": "Smith",
@@ -470,6 +554,7 @@ class TestRequestModels(unittest.TestCase):
             ["first_name", "last_name"]
         )
 
+    def test_correct_email_and_phone(self):
         data = {
             "email": "john@gmail.com",
             "phone": "71234567890",
@@ -481,6 +566,7 @@ class TestRequestModels(unittest.TestCase):
             ["email", "phone"]
         )
 
+    def test_correct_birthday_and_gender(self):
         data = {
             "birthday": "06.01.1990",
             "gender": api.MALE
@@ -492,6 +578,7 @@ class TestRequestModels(unittest.TestCase):
             ["birthday", "gender"]
         )
 
+    def test_invalid_birthday(self):
         data = {
             "first_name": "John",
             "last_name": "Smith",
@@ -503,6 +590,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.OnlineScoreRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_email(self):
         data = {
             "first_name": "John",
             "last_name": "Smith",
@@ -514,6 +602,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.OnlineScoreRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_field_pairs(self):
         data = {
             "first_name": "John",
             "phone": "71234567890",
@@ -522,7 +611,9 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.OnlineScoreRequest(data)
         self.assertFalse(request_validator.is_valid())
 
-    def test_method_request(self):
+
+class TestMethodRequest(unittest.TestCase):
+    def test_correct_all_fields(self):
         data = {
             "account": "horns&hoofs",
             "login": "horns&hoofs",
@@ -538,6 +629,7 @@ class TestRequestModels(unittest.TestCase):
         self.assertEqual(request_validator.arguments, data.get("arguments"))
         self.assertEqual(request_validator.method, data.get("method"))
 
+    def test_correct_without_account(self):
         data = {
             "login": "horns&hoofs",
             "token": "admin123",
@@ -551,6 +643,7 @@ class TestRequestModels(unittest.TestCase):
             ["login", "token", "method"]
         )
 
+    def test_invalid_without_method(self):
         data = {
             "account": "horns&hoofs",
             "login": "horns&hoofs",
@@ -560,6 +653,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.MethodRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_login(self):
         data = {
             "account": "horns&hoofs",
             "login": 123,
@@ -570,6 +664,7 @@ class TestRequestModels(unittest.TestCase):
         request_validator = api.MethodRequest(data)
         self.assertFalse(request_validator.is_valid())
 
+    def test_invalid_account(self):
         data = {
             "account": {"a": 12},
             "login": "horns&hoofs",

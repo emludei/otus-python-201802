@@ -75,7 +75,7 @@ class ValidationError(Exception):
         return "ValidationError({0})".format(self)
 
 
-def validate_digit(value):
+def validate_integer(value):
     if not isinstance(value, int):
         raise ValidationError("This field must be digit.")
 
@@ -143,7 +143,7 @@ def validate_birthday(value):
 
 
 def validate_gender(value):
-    validate_digit(value)
+    validate_integer(value)
     if value not in GENDERS:
         message = "Invalid type of gender, available values are {0}".format(
             ", ".join(map(str, GENDERS.keys()))
@@ -158,7 +158,7 @@ def validate_int_array(value):
 
     for item in value:
         try:
-            validate_digit(item)
+            validate_integer(item)
         except ValidationError:
             raise ValidationError(error_message)
 
@@ -168,10 +168,11 @@ def get_date_from_string(string_date):
 
 
 class Field:
+    validators = []
+
     def __init__(self, required=True, nullable=False):
         self.required = required
         self.nullable = nullable
-        self.validators = []
         self.is_empty = False
 
     def validate(self, value):
@@ -269,10 +270,10 @@ class BaseRequestValidator:
         return "; ".join(field_errors)
 
     def non_empty_fields(self):
-        empty_fields = [
+        non_empty_fields = [
             name for name, field in self.fields.items() if not field.is_empty
         ]
-        return empty_fields
+        return non_empty_fields
 
     def __getattr__(self, attr):
         if self.fields.get(attr) is None:
@@ -292,51 +293,35 @@ class RequestValidator(BaseRequestValidator, metaclass=DeclarativeFieldsMeta):
 
 
 class CharField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_string)
+    validators = [validate_string]
 
 
 class ArgumentsField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_dict)
+    validators = [validate_dict]
 
 
 class EmailField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_email)
+    validators = [validate_email]
 
 
 class PhoneField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_phone)
+    validators = [validate_phone]
 
 
 class DateField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_date)
+    validators = [validate_date]
 
 
 class BirthDayField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_birthday)
+    validators = [validate_birthday]
 
 
 class GenderField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_gender)
+    validators = [validate_gender]
 
 
 class ClientIDsField(Field):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validators.append(validate_int_array)
+    validators = [validate_int_array]
 
 
 class ClientsInterestsRequest(RequestValidator):
@@ -460,18 +445,17 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     store = None
 
     def get_request_id(self, headers):
-        return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
+        return headers.get("HTTP_X_REQUEST_ID", uuid.uuid4().hex)
 
     def do_POST(self):
         response, code = {}, OK
         context = {"request_id": self.get_request_id(self.headers)}
         request = None
         try:
-            data_string = self.rfile.read(
-                int(self.headers['Content-Length'])
-            ).decode("utf-8")
+            content_length = int(self.headers.get("Content-Length"))
+            data_string = self.rfile.read(content_length).decode("utf-8")
             request = json.loads(data_string)
-        except:
+        except (TypeError, ValueError):
             code = BAD_REQUEST
 
         if request:
@@ -507,6 +491,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(r).encode("utf-8"))
         return
 
+
 if __name__ == "__main__":
     op = OptionParser()
     op.add_option("-p", "--port", action="store", type=int, default=8080)
@@ -515,8 +500,8 @@ if __name__ == "__main__":
     logging.basicConfig(
         filename=opts.log,
         level=logging.INFO,
-        format='[%(asctime)s] %(levelname).1s %(message)s',
-        datefmt='%Y.%m.%d %H:%M:%S'
+        format="[%(asctime)s] %(levelname).1s %(message)s",
+        datefmt="%Y.%m.%d %H:%M:%S"
     )
     server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
     logging.info("Starting server at %s" % opts.port)
