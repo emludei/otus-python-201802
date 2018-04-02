@@ -1,0 +1,7 @@
+FROM python:3.6
+
+COPY . /
+
+RUN pip install -r requirenments.txt
+
+CMD sleep 2 && python -m unittest -v test_integration.py
