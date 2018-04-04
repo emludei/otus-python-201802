@@ -538,235 +538,131 @@ class TestClientInterestsHandler(BaseHandlerTest):
 
 
 class TestValidators(unittest.TestCase):
-    def test_validate_integer_invalid_values(self):
+    @cases(["12", 3.5, "asd", {}, None, [], tuple(), set(), int])
+    def test_validate_integer_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_integer("12")
-        with self.assertRaises(api.ValidationError):
-            api.validate_integer(3.5)
-        with self.assertRaises(api.ValidationError):
-            api.validate_integer("asd")
-        with self.assertRaises(api.ValidationError):
-            api.validate_integer({})
-        with self.assertRaises(api.ValidationError):
-            api.validate_integer(None)
+            api.validate_integer(value)
 
-    def test_validate_integer_correct_values(self):
+    @cases([10, -10, 0, 1, -1])
+    def test_validate_integer_correct_values(self, value):
         try:
-            api.validate_integer(10)
-            api.validate_integer(-10)
-            api.validate_integer(0)
+            api.validate_integer(value)
         except BaseException as e:
             message = "api.validate_digit(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_string_invalid_values(self):
+    @cases([123, None, [], {}, set(), tuple(), str, 3.5])
+    def test_validate_string_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_string(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_string(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_string({})
-        with self.assertRaises(api.ValidationError):
-            api.validate_string(str)
+            api.validate_string(value)
 
-    def test_validate_string_correct_values(self):
+    @cases(["", "123", "asd"])
+    def test_validate_string_correct_values(self, value):
         try:
-            api.validate_string("")
-            api.validate_string("asd")
-            api.validate_string("123")
+            api.validate_string(value)
         except BaseException as e:
             message = "api.validate_string(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_dict_invalid_values(self):
+    @cases([123, None, {1, 2}, tuple(), dict, "", [], 3.4])
+    def test_validate_dict_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_dict(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_dict(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_dict([])
-        with self.assertRaises(api.ValidationError):
-            api.validate_dict("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_dict(tuple())
-        with self.assertRaises(api.ValidationError):
-            api.validate_dict(dict)
+            api.validate_dict(value)
 
-    def test_validate_dict_correct_values(self):
+    @cases([{}, {"a": 1}, defaultdict(int), OrderedDict()])
+    def test_validate_dict_correct_values(self, value):
         try:
-            api.validate_dict({})
-            api.validate_dict({"a": 1})
-            api.validate_dict(defaultdict(int))
-            api.validate_dict(OrderedDict())
+            api.validate_dict(value)
         except BaseException as e:
             message = "api.validate_dict(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_phone_invalid_values(self):
+    @cases([123, -71234567890, -7123456789, None, [], "12345678900",
+            "-7123456789", "", tuple(), dict])
+    def test_validate_phone_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_phone(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone(-71234567890)
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone(-7123456789)
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone([])
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone("12345678900")
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone("-7123456789")
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone(tuple())
-        with self.assertRaises(api.ValidationError):
-            api.validate_phone(dict)
+            api.validate_phone(value)
 
-    def test_validate_phone_correct_values(self):
+    @cases([71234567890, "71234567890"])
+    def test_validate_phone_correct_values(self, value):
         try:
-            api.validate_phone(71234567890)
-            api.validate_phone("71234567890")
+            api.validate_phone(value)
         except BaseException as e:
             message = "api.validate_phone(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_email_invalid_values(self):
+    @cases([123, "asd.com", "asd@", None, {}, "@", str, "asd@"])
+    def test_validate_email_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_email(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_email("asd.com")
-        with self.assertRaises(api.ValidationError):
-            api.validate_email("asd@")
-        with self.assertRaises(api.ValidationError):
-            api.validate_email(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_email({})
-        with self.assertRaises(api.ValidationError):
-            api.validate_email("@")
-        with self.assertRaises(api.ValidationError):
-            api.validate_email(str)
-        with self.assertRaises(api.ValidationError):
-            api.validate_email("asd@")
+            api.validate_email(value)
 
-    def test_validate_email_correct_values(self):
+    @cases(["test@test.com", "test.test@test.test.com"])
+    def test_validate_email_correct_values(self, value):
         try:
-            api.validate_email("test@test.com")
-            api.validate_email("test.test@test.test.com")
+            api.validate_email(value)
         except BaseException as e:
             message = "api.validate_email(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_birthday_invalid_values(self):
+    @cases([123, "", None, {}, "@", "01-01-1999", "01.01.1940", "99.01.1999",
+            "01.99.1999", "01.99.2999"])
+    def test_validate_birthday_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_birthday(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday({})
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("@")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("01-01-1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("01.01.1940")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("99.01.1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("01.99.1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_birthday("01.99.2999")
+            api.validate_birthday(value)
 
-    def test_validate_birthday_correct_values(self):
+    @cases(["01.01.1990", "23.11.2015"])
+    def test_validate_birthday_correct_values(self, value):
         try:
-            api.validate_birthday("01.01.1990")
-            api.validate_birthday("23.11.2015")
+            api.validate_birthday(value)
         except BaseException as e:
             message = "api.validate_birthday(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_gender_invalid_values(self):
+    @cases([123, -1, 1.0, "", None, {}, int, [], tuple(), set(), 3])
+    def test_validate_gender_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_gender(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_gender(-1)
-        with self.assertRaises(api.ValidationError):
-            api.validate_gender(1.0)
-        with self.assertRaises(api.ValidationError):
-            api.validate_gender("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_gender(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_gender({})
+            api.validate_gender(value)
 
-    def test_validate_gender_correct_values(self):
+    @cases([0, 1, 2])
+    def test_validate_gender_correct_values(self, value):
         try:
-            api.validate_gender(0)
-            api.validate_gender(1)
-            api.validate_gender(2)
+            api.validate_gender(value)
         except BaseException as e:
             message = "api.validate_gender(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_int_array_invalid_values(self):
+    @cases([123, "", None, {1: 1, 2: 2}, ["1", "2", "3"], [1, 2, "3"],
+            [1, 2, [3, 4]], {1, 2, 3, 4}])
+    def test_validate_int_array_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_int_array(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array({1: 1, 2: 2})
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array(["1", "2", "3"])
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array([1, 2, "3"])
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array([1, 2, [3, 4]])
-        with self.assertRaises(api.ValidationError):
-            api.validate_int_array({1, 2, 3, 4})
+            api.validate_int_array(value)
 
-    def test_validate_int_array_correct_values(self):
+    @cases([[1, 2, 3, 4], (1, 2, 3, 4)])
+    def test_validate_int_array_correct_values(self, value):
         try:
-            api.validate_int_array([1, 2, 3, 4])
-            api.validate_int_array((1, 2, 3, 4))
+            api.validate_int_array(value)
         except BaseException as e:
             message = "api.validate_int_array(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
             self.fail(message)
 
-    def test_validate_date_invalid_values(self):
+    @cases([123, "", None, {}, "01-01-1999", "99.01.1999", "01.99.1999",
+            "01.99.2999"])
+    def test_validate_date_invalid_values(self, value):
         with self.assertRaises(api.ValidationError):
-            api.validate_date(123)
-        with self.assertRaises(api.ValidationError):
-            api.validate_date("")
-        with self.assertRaises(api.ValidationError):
-            api.validate_date(None)
-        with self.assertRaises(api.ValidationError):
-            api.validate_date({})
-        with self.assertRaises(api.ValidationError):
-            api.validate_date("01-01-1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_date("99.01.1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_date("01.99.1999")
-        with self.assertRaises(api.ValidationError):
-            api.validate_date("01.99.2999")
+            api.validate_date(value)
 
-    def test_validate_date_correct_values(self):
+    @cases(["01.01.1990", "23.11.2015"])
+    def test_validate_date_correct_values(self, value):
         try:
-            api.validate_date("01.01.1990")
-            api.validate_date("23.11.2015")
+            api.validate_date(value)
         except BaseException as e:
             message = "api.validate_date(value) function " \
                       "raises {0}{1}".format(type(e).__name__, e)
