@@ -1,0 +1,11 @@
+[Unit]
+Description=ip2w service (uwsgi)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/bash -c 'uwsgi --ini /usr/local/etc/ip2w.ini'
+Restart=always
+PIDFile=/var/run/ip2w.pid
+
+[Install]
+WantedBy=multi-user.target
