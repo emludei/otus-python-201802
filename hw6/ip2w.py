@@ -12,8 +12,6 @@ import ujson
 
 IPINFO_API_URL_TEMPLATE = "https://ipinfo.io/{0}"
 WEATHER_API_URL = "http://api.openweathermap.org/data/2.5/weather"
-WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
-
 
 LOGGER_FORMAT = "[%(asctime)s] %(levelname).1s %(message)s"
 LOGGER_DATE_FORMAT = "%Y.%m.%d %H:%M:%S"
