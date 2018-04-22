@@ -55,5 +55,6 @@ systemctl start ip2w
 #### Запуск тестов
 
 ```bash
+установить зависимости из requirements.txt
 python3 test_ip2w.py
 ```
