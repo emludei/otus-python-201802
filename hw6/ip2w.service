@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 ExecStart=/usr/bin/bash -c 'uwsgi --ini /usr/local/etc/ip2w.ini'
+ExecStop=/usr/bin/bash -c 'echo Q > /var/run/ip2w.fifo'
 Restart=always
 PIDFile=/var/run/ip2w.pid
 

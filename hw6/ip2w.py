@@ -12,6 +12,7 @@ import ujson
 
 IPINFO_API_URL_TEMPLATE = "https://ipinfo.io/{0}"
 WEATHER_API_URL = "http://api.openweathermap.org/data/2.5/weather"
+WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
 
 
 LOGGER_FORMAT = "[%(asctime)s] %(levelname).1s %(message)s"
@@ -23,7 +24,8 @@ DEFAULT_CONFIG = {
     "LOGFILE": "/var/log/ip2w/error.log",
     "HTTP_CLIENT_TIMEOUT": 1,
     "HTTP_CLIENT_RETIES": 3,
-    "HTTP_CLIENT_RETRY_TIMEOUT": 3
+    "HTTP_CLIENT_RETRY_TIMEOUT": 3,
+    "WEATHER_API_KEY": ""  # api key for openWeatherMap, set in config file
 }
 
 
@@ -51,7 +53,7 @@ def get_status_string(status):
 
 
 def send_response(status, data, start_response):
-    body = ujson.dumps(data)
+    body = ujson.dumps(data).encode("utf-8")
     headers = get_headers(body)
     status = get_status_string(status)
     start_response(status, headers)
@@ -91,8 +93,8 @@ class Application:
 
         try:
             ipinfo = self.ipinfo(ip)
-        except ValueError:
-            self.logger.exception("Cant get ip info: ")
+        except ValueError as e:
+            self.logger.error("Cant get ip info: ", e)
             return send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get ip info."},
@@ -119,7 +121,7 @@ class Application:
             log_message = "Invalid response from {0}, no location: ".format(
                 IPINFO_API_URL_TEMPLATE
             )
-            self.logger.exception(log_message)
+            self.logger.error(log_message)
             return send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get weather info by location."},
@@ -131,7 +133,7 @@ class Application:
         except ValueError:
             log_message = "Invalid response from {0}, " \
                           "cant get location: ".format(IPINFO_API_URL_TEMPLATE)
-            self.logger.exception(log_message)
+            self.logger.error(log_message)
             return send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get location of ip."},
@@ -140,8 +142,8 @@ class Application:
 
         try:
             weather = self.weather(lat, lon)
-        except ValueError:
-            self.logger.exception("Cant get weather info by location: ")
+        except (ValueError, OSError) as e:
+            self.logger.error("Cant get weather info by location: ", e)
             return send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get weather info by location."},
@@ -151,7 +153,7 @@ class Application:
         try:
             data = {
                 "city": weather["name"],
-                "temp": weather["temp"],
+                "temp": weather["main"]["temp"],
                 "conditions": weather["weather"][0]["description"]
             }
         except LookupError:
@@ -171,7 +173,13 @@ class Application:
         return ujson.loads(response.content)
 
     def weather(self, lat, lon):
-        response = self.get_response(WEATHER_API_URL, {"lat": lat, "lon": lon})
+        data = {
+            "lat": lat,
+            "lon": lon,
+            "appid": self.config.get("WEATHER_API_KEY"),
+            "units": "metric"
+        }
+        response = self.get_response(WEATHER_API_URL, data)
         return ujson.loads(response.content)
 
     def get_response(self, url, params=None):
