@@ -20,11 +20,30 @@ CONFIG_FILE_PATH_ENVIRON = "IP2W_CONFIG_FILE_PATH"
 DEFAULT_CONFIG_FILE_PATH = "/usr/local/etc/ip2w.json"
 DEFAULT_CONFIG = {
     "LOGFILE": "/var/log/ip2w/error.log",
-    "HTTP_CLIENT_TIMEOUT": 1,
-    "HTTP_CLIENT_RETIES": 3,
-    "HTTP_CLIENT_RETRY_TIMEOUT": 3,
     "WEATHER_API_KEY": ""  # api key for openWeatherMap, set in config file
 }
+
+DEFAULT_HTTP_CLIENT_TIMEOUT = 1
+DEFAULT_RETIES_COUNT = 3
+DEFAULT_RETRY_TIMEOUT = 3
+
+
+def retry(max_retries, retry_timeout):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for retry_number in range(max_retries):
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except OSError:
+                    if retry_number == max_retries - 1:
+                        raise
+
+                    time.sleep(retry_timeout)
+
+        return wrapper
+
+    return decorator
 
 
 def is_ip(ip):
@@ -36,26 +55,29 @@ def is_ip(ip):
     return True
 
 
-def get_headers(body):
-    response_headers = [
-        ('Content-Type', 'text/plain'),
-        ('Content-Length', str(len(body)))
-    ]
-
-    return response_headers
-
-
-def get_status_string(status):
-    status_string = "{0} {1}".format(status.value, status.name)
-    return status_string
+@retry(DEFAULT_RETIES_COUNT, DEFAULT_RETRY_TIMEOUT)
+def get_ipinfo(ip):
+    url = IPINFO_API_URL_TEMPLATE.format(ip)
+    response = requests.get(url, timeout=DEFAULT_HTTP_CLIENT_TIMEOUT)
+    response.raise_for_status()
+    return ujson.loads(response.content)
 
 
-def send_response(status, data, start_response):
-    body = ujson.dumps(data).encode("utf-8")
-    headers = get_headers(body)
-    status = get_status_string(status)
-    start_response(status, headers)
-    return [body]
+@retry(DEFAULT_RETIES_COUNT, DEFAULT_RETRY_TIMEOUT)
+def get_weather(lat, lon, api_key):
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "appid": api_key,
+        "units": "metric"
+    }
+    response = requests.get(
+        WEATHER_API_URL,
+        timeout=DEFAULT_HTTP_CLIENT_TIMEOUT,
+        params=params
+    )
+    response.raise_for_status()
+    return ujson.loads(response.content)
 
 
 class Application:
@@ -75,7 +97,7 @@ class Application:
         uri = environ.get("REQUEST_URI", "")
         uri_parts = uri.split("/")
         if len(uri_parts) < 1:
-            return send_response(
+            return self.send_response(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "Invalid request."},
                 start_response
@@ -83,17 +105,17 @@ class Application:
 
         ip = uri_parts[-1]
         if not is_ip(ip):
-            return send_response(
+            return self.send_response(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "Invalid ip."},
                 start_response
             )
 
         try:
-            ipinfo = self.ipinfo(ip)
+            ipinfo = get_ipinfo(ip)
         except ValueError as e:
             self.logger.error("Cant get ip info: ", e)
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get ip info."},
                 start_response
@@ -102,13 +124,13 @@ class Application:
         if "error" in ipinfo:
             self.logger.error("Got cant get info for ip {0}, "
                               "response {1}".format(ip, ipinfo.get("error")))
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get info for ip."},
                 start_response
             )
         if "bogon" in ipinfo:
-            return send_response(
+            return self.send_response(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "Invalid ip."},
                 start_response
@@ -120,7 +142,7 @@ class Application:
                 IPINFO_API_URL_TEMPLATE
             )
             self.logger.error(log_message)
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get weather info by location."},
                 start_response
@@ -132,17 +154,18 @@ class Application:
             log_message = "Invalid response from {0}, " \
                           "cant get location: ".format(IPINFO_API_URL_TEMPLATE)
             self.logger.error(log_message)
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get location of ip."},
                 start_response
             )
 
         try:
-            weather = self.weather(lat, lon)
+            weather_api_key = self.config.get("WEATHER_API_KEY")
+            weather = get_weather(lat, lon, weather_api_key)
         except (ValueError, OSError) as e:
             self.logger.error("Cant get weather info by location: ", e)
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Cant get weather info by location."},
                 start_response
@@ -157,44 +180,34 @@ class Application:
         except LookupError:
             log_message = "Invalid weather json response: {0}".format(weather)
             self.logger.error(log_message)
-            return send_response(
+            return self.send_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": "Invalid weather json response."},
                 start_response
             )
 
-        return send_response(HTTPStatus.OK, data, start_response)
+        return self.send_response(HTTPStatus.OK, data, start_response)
 
-    def ipinfo(self, ip):
-        url = IPINFO_API_URL_TEMPLATE.format(ip)
-        response = self.get_response(url)
-        return ujson.loads(response.content)
+    @staticmethod
+    def get_headers(body):
+        response_headers = [
+            ('Content-Type', 'text/plain'),
+            ('Content-Length', str(len(body)))
+        ]
 
-    def weather(self, lat, lon):
-        data = {
-            "lat": lat,
-            "lon": lon,
-            "appid": self.config.get("WEATHER_API_KEY"),
-            "units": "metric"
-        }
-        response = self.get_response(WEATHER_API_URL, data)
-        return ujson.loads(response.content)
+        return response_headers
 
-    def get_response(self, url, params=None):
-        timeout = self.config.get("HTTP_CLIENT_TIMEOUT")
-        max_retries = self.config.get("HTTP_CLIENT_RETIES")
-        retry_timeout = self.config.get("HTTP_CLIENT_RETRY_TIMEOUT")
+    @staticmethod
+    def get_status_string(status):
+        status_string = "{0} {1}".format(status.value, status.name)
+        return status_string
 
-        for retry_number in range(max_retries):
-            try:
-                response = requests.get(url, timeout=timeout, params=params)
-                response.raise_for_status()
-                return response
-            except OSError:
-                if retry_number == max_retries - 1:
-                    raise
-
-                time.sleep(retry_timeout)
+    def send_response(self, status, data, start_response):
+        body = ujson.dumps(data).encode("utf-8")
+        headers = self.get_headers(body)
+        status = self.get_status_string(status)
+        start_response(status, headers)
+        return [body]
 
 
 def parse_config(config_file_path):
